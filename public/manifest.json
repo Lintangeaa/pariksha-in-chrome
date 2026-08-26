@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Pariksha Recorder",
+  "version": "0.1.0",
+  "description": "Records network requests, console logs, and clicks for a Pariksha PB, redacting sensitive data before it ever leaves the browser.",
+  "permissions": ["storage", "webRequest", "activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
