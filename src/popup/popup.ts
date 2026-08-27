@@ -58,6 +58,36 @@ async function loadPbsForWorkspace(workspaceId: string): Promise<void> {
   updateStartButton();
 }
 
+async function syncRecordingStatus(): Promise<void> {
+  // The popup is torn down and rebuilt from scratch every time it's
+  // reopened (Chrome closes it on outside click/tab switch), but the
+  // background service worker's recording state survives that — so on
+  // open we must ask background what's actually happening instead of
+  // defaulting to "not recording". Without this, a still-recording
+  // session looks stopped, and clicking "Mulai Rekam" again would hit
+  // START_RECORDING's buffer.clear() and destroy the events already
+  // captured.
+  // chrome.runtime.sendMessage can reject (e.g. the service worker is
+  // mid-restart) — if that happens silently, the popup falls back to the
+  // "not recording" default, which is exactly the bug this function
+  // exists to prevent, just triggered by a transport error instead of a
+  // missing call. Log it so a stale UI state is at least debuggable.
+  let status: { recording?: boolean } | undefined;
+  try {
+    status = await chrome.runtime.sendMessage({ type: "GET_STATUS" });
+  } catch (err) {
+    console.error("syncRecordingStatus: GET_STATUS failed", err);
+    return;
+  }
+  if (status?.recording) {
+    workspaceSelect.disabled = true;
+    pbSelect.disabled = true;
+    startButton.style.display = "none";
+    stopButton.style.display = "block";
+    statusEl.textContent = "Recording...";
+  }
+}
+
 async function showRecordingView(): Promise<void> {
   loginView.style.display = "none";
   recordingView.style.display = "block";
@@ -67,6 +97,7 @@ async function showRecordingView(): Promise<void> {
     workspaces.map((w) => ({ id: w.id, label: w.name })),
   );
   if (workspaces[0]) await loadPbsForWorkspace(workspaces[0].id);
+  await syncRecordingStatus();
 }
 
 workspaceSelect.addEventListener("change", () =>
