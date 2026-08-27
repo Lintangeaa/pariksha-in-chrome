@@ -25,6 +25,16 @@ function updateBadge(): void {
   chrome.action.setBadgeBackgroundColor({ color: "#d93025" });
 }
 
+// The extension has no popup anymore (replaced by the content script's
+// floating button + panel) — the toolbar icon click now just asks the
+// active tab's content script to toggle its panel open/closed.
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.id === undefined) return;
+  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_PANEL" }).catch(() => {
+    // No content script listening in this tab (e.g. chrome:// pages) — fine to ignore.
+  });
+});
+
 async function broadcastToAllTabs(message: unknown): Promise<void> {
   const tabs = await chrome.tabs.query({});
   for (const tab of tabs) {
@@ -69,17 +79,20 @@ chrome.webRequest.onCompleted.addListener(
     pendingRequests.delete(details.requestId);
     if (!pending) return;
 
-    buffer.push(
-      handleWebRequestEvent({
-        url: pending.url ?? details.url,
-        method: pending.method ?? details.method,
-        statusCode: details.statusCode,
-        timeStamp: pending.timeStamp ?? details.timeStamp,
-        requestHeaders: pending.requestHeaders ?? [],
-        responseHeaders: details.responseHeaders ?? [],
-        requestBody: pending.requestBody,
-      }),
-    );
+    const event = handleWebRequestEvent({
+      url: pending.url ?? details.url,
+      method: pending.method ?? details.method,
+      statusCode: details.statusCode,
+      timeStamp: pending.timeStamp ?? details.timeStamp,
+      requestHeaders: pending.requestHeaders ?? [],
+      responseHeaders: details.responseHeaders ?? [],
+      requestBody: pending.requestBody,
+    });
+    buffer.push(event);
+    // Same live-sync contract as the RECORDED_EVENT handler below — every
+    // open panel should see network events as they happen, not just
+    // click/input/console (which arrive via that separate message path).
+    broadcastToAllTabs({ type: "RECORDED_EVENT", event });
   },
   { urls: ["<all_urls>"] },
   ["responseHeaders"],
@@ -110,7 +123,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return undefined;
 
     case "RECORDED_EVENT":
-      if (recording) buffer.push(message.event as RecordedEvent);
+      if (recording) {
+        buffer.push(message.event as RecordedEvent);
+        // Broadcast to every tab (not just the sender) so a panel open on
+        // any tab shows the same live list while a recording is in
+        // progress, regardless of which tab the event actually happened in.
+        broadcastToAllTabs(message);
+      }
       return undefined;
 
     case "UPLOAD_RECORDING":

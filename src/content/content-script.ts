@@ -5,6 +5,7 @@ import {
   handleNavigation,
 } from "../lib/contentHandlers.js";
 import { RecordedEvent } from "../lib/events.js";
+import { mountPanel } from "./panel/mount.js";
 
 let uninstallConsoleHook: (() => void) | null = null;
 
@@ -58,3 +59,16 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "START_RECORDING") startCapturing();
   if (message?.type === "STOP_RECORDING") stopCapturing();
 });
+
+// Injected at document_start, before <body> exists — the floating
+// button/panel UI is separate from the capture logic above, mounted once
+// the DOM is ready to receive it.
+function mountPanelWhenReady(): void {
+  if (document.body) {
+    mountPanel();
+  } else {
+    document.addEventListener("DOMContentLoaded", mountPanel, { once: true });
+  }
+}
+
+mountPanelWhenReady();

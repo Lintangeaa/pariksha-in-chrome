@@ -33,18 +33,22 @@ const shared = {
   target: "chrome110",
   define,
   logLevel: "info",
+  // The floating button + panel (src/content/panel/*.tsx) are Preact —
+  // automatic JSX runtime pointed at "preact" instead of React.
+  jsx: "automatic",
+  jsxImportSource: "preact",
 };
 
-// background.js runs as a manifest `"type": "module"` service worker, and
-// popup.js is loaded via `<script type="module">` — both support ESM.
+// background.js runs as a manifest `"type": "module"` service worker — ESM.
 // content-script.js is injected via manifest `content_scripts`, which does
-// NOT run as a module, so it must stay a classic (IIFE) script.
+// NOT run as a module, so it must stay a classic (IIFE) script (this is also
+// where the Preact floating button/panel UI is bundled in, since it's
+// mounted from the content script).
 const esmBuild = {
   ...shared,
   format: "esm",
   entryPoints: {
     background: "src/background/background.ts",
-    popup: "src/popup/popup.ts",
   },
 };
 const iifeBuild = {
